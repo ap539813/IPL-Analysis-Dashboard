@@ -736,19 +736,22 @@ if __name__ == '__main__':
         # Adding nodes for the selected players and edges based on wickets taken
         for (bowler, batsman), wickets in wickets_taken.items():
             G5.add_node(bowler, type='bowler', color='red', size=balls_delivered[bowler])
-            G5.add_node(batsman, type='batsman', color='skyblue')
+            # G5.add_node(batsman, type='batsman', color='skyblue')
             G5.add_edge(bowler, batsman, weight=wickets)
 
         # Plotting the graph
         fig5, ax5 = plt.subplots(figsize=(14, 10))
+        # Displaying only the bowler labels and hiding batsman labels for clarity
+        bowler_labels = {node: node for node in balls_delivered.keys()}
+
         color_map_5 = [G5.nodes[node].get('color', 'green') for node in G5.nodes()]
         node_sizes = [G5.nodes[node].get('size', 1) * 0.5 for node in G5.nodes()]
         edge_widths = [G5[u][v]['weight'] * 0.5 for u, v in G5.edges()]
         pos_5 = nx.circular_layout(G5)
 
         nx.draw_networkx_nodes(G5, pos_5, node_color=color_map_5, node_size=node_sizes)
-        nx.draw_networkx_edges(G5, pos_5, width=edge_widths)
-        nx.draw_networkx_labels(G5, pos_5, font_size=8)
+        nx.draw_networkx_edges(G5, pos_5, width=edge_widths, alpha=0.3)
+        nx.draw_networkx_labels(G5, pos_5, labels=bowler_labels, font_size=15)
         plt.title(f"Relationship of Selected Bowlers with Batsmen")
         plt.axis("off")
         st.pyplot(fig5)
@@ -770,7 +773,7 @@ if __name__ == '__main__':
 
         # Formatting the description using f-string
         description = f"""
-        In the network graph:
+        In the above network graph:
         - There are {total_bowlers} selected bowlers, shown as red nodes.
         - The size of each bowler's node indicates the number of balls they've delivered.
         - {most_balls_bowler} has delivered the most balls, totaling {most_balls}.
@@ -780,3 +783,46 @@ if __name__ == '__main__':
         """
 
         st.markdown(description)
+
+
+
+
+
+
+
+        # For demonstration purposes, selecting the top 11 batsmen based on the number of runs scored
+        selected_players = player_data.groupby('batsman')['batsman_runs'].sum().nlargest(11).index.tolist()
+
+        # Filtering the dataset for selected players as batsmen
+        filtered_data_batsmen = player_data[player_data['batsman'].isin(selected_players)]
+
+        # Calculating total runs made by each of the selected players
+        total_runs = filtered_data_batsmen.groupby('batsman')['batsman_runs'].sum().to_dict()
+
+        # Calculating number of sixes and fours by each batsman against every bowler
+        boundary_data = filtered_data_batsmen[filtered_data_batsmen['batsman_runs'].isin([4, 6])]
+        boundaries_hit = boundary_data.groupby(['batsman', 'bowler'])['batsman_runs'].size().to_dict()
+
+        # Creating the network graph
+        G6 = nx.Graph()
+
+        # Adding nodes for the selected players and edges based on boundaries hit
+        for (batsman, bowler), boundaries in boundaries_hit.items():
+            G6.add_node(batsman, type='batsman', color='gold', size=total_runs[batsman])
+            # G6.add_node(bowler, type='bowler', color='green')
+            G6.add_edge(batsman, bowler, weight=boundaries)
+
+        batter_labels = {node: node for node in total_runs.keys()}
+        # Plotting the graph
+        fig8, ax8 = plt.subplots(figsize=(14, 10))
+        color_map_6 = [G6.nodes[node].get('color', 'black') for node in G6.nodes()]
+        node_sizes = [G6.nodes[node].get('size', 1) * 0.3 for node in G6.nodes()]
+        edge_widths = [G6[u][v]['weight'] * 0.1 for u, v in G6.edges()]
+        pos_6 = nx.circular_layout(G6)
+
+        nx.draw_networkx_nodes(G6, pos_6, node_color=color_map_6, node_size=node_sizes)
+        nx.draw_networkx_edges(G6, pos_6, width=edge_widths, alpha=0.3)  # Setting alpha to make edges opaque
+        nx.draw_networkx_labels(G6, pos_6, labels = batter_labels, font_size=15)
+        plt.title(f"Relationship of Selected Batsmen with Bowlers (based on boundaries)")
+        plt.axis("off")
+        st.pyplot(fig8)
