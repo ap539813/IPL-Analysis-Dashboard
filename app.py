@@ -661,34 +661,50 @@ if __name__ == '__main__':
                                         (player_data['bowling_team'].isin(selected_teams)) & 
                                         (player_data['year'] == selected_year)]
 
-            # Creating the network graph
+            # Color mapping for player types
+            color_map_dict = {
+                'batsman': 'gold',
+                'non_striker': 'silver',
+                'bowler': 'green',
+                'fielder': 'blue',
+                'umpire': 'red'
+            }
+
+            # Updating the graph based on the player relationships and different colors
             G4 = nx.Graph()
 
-            # Adding nodes and edges based on the player relationships
             for idx, row in filtered_data.iterrows():
-                players = [row['batsman'], row['non_striker'], row['bowler'], row['fielder']]
-                umpires = [row['umpire1'], row['umpire2']]
+                player_types = ['batsman', 'non_striker', 'bowler', 'fielder']
                 
-                # Adding player nodes
-                for player in players:
+                for p_type in player_types:
+                    player = row[p_type]
                     if pd.notna(player):  # Checking if the player field is not null
-                        G4.add_node(player, type='player', color='skyblue')
-                
-                # Adding edges between players and umpires
-                for player in players:
-                    for umpire in umpires:
-                        if pd.notna(player) and pd.notna(umpire):  # Checking if both player and umpire fields are not null
-                            G4.add_node(umpire, type='umpire', color='red')
-                            G4.add_edge(player, umpire, label=umpire)
+                        G4.add_node(player, type=p_type, color=color_map_dict[p_type])
 
-            # Plotting the graph
-            fig4, ax4 = plt.subplots(figsize=(12, 7))
-            color_map_4 = [G4.nodes[node].get('color', 'green') for node in G4.nodes()]
+                umpires = [row['umpire1'], row['umpire2']]
+                for umpire in umpires:
+                    if pd.notna(umpire):  # Checking if the umpire field is not null
+                        G4.add_node(umpire, type='umpire', color=color_map_dict['umpire'])
+                        for player in player_types:
+                            G4.add_edge(row[player], umpire, label=umpire)
+
+            # Extracting the color map for nodes
+            color_map_4 = [G4.nodes[node].get('color', 'black') for node in G4.nodes()]
             pos_4 = nx.circular_layout(G4)
 
-            nx.draw_networkx_nodes(G4, pos_4, node_color=color_map_4)
+            # Plotting the graph with legend
+            fig4, ax4 = plt.subplots(figsize=(12, 7))
+
+            nx.draw_networkx_nodes(G4, pos_4, node_color=color_map_4, node_size=500)
             nx.draw_networkx_edges(G4, pos_4)
             nx.draw_networkx_labels(G4, pos_4, font_size=8)
+
+            # Adding legend
+            legend_labels = {v: k for k, v in color_map_dict.items()}
+            patches = [plt.Line2D([0], [0], marker='o', color='w', label=legend_labels[color], 
+                                markersize=10, markerfacecolor=color) for color in color_map_dict.values()]
+            plt.legend(handles=patches, loc='upper right')
+
             plt.title(f"Player Relationships for {selected_teams} in {selected_year}")
             plt.axis("off")
             st.pyplot(fig4)
