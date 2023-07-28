@@ -1,0 +1,44 @@
+body {
+    color: #fff;
+    background-color: #11A27B;
+    /* font-size: 40px; */
+}
+
+#MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+
+/* For white theme of the layout following button style will be used*/
+.css-1x8cf1d.edgvbvh10{
+	box-shadow: 0px 0px 15px 0px #26c21b;
+	background-color:#59e65b;
+	border-radius:15px;
+	border:1px solid #2eab18;
+	display:inline-block;
+	cursor:pointer;
+	color:#115c05;
+	font-family:Arial;
+	font-size:18px;
+	font-weight:bold;
+	padding:7px 58px;
+	text-decoration:none;
+    width: auto;
+    align-self: center;
+}
+
+/* For dark theme of the layout following button style will be used*/
+.css-5uatcg.edgvbvh10{
+    box-shadow: 0px 0px 15px 0px #26c21b;
+	background-color:#59e65b;
+	border-radius:15px;
+	border:1px solid #2eab18;
+	display:inline-block;
+	cursor:pointer;
+	color:#115c05;
+	font-family:Arial;
+	font-size:18px;
+	font-weight:bold;
+	padding:7px 58px;
+	text-decoration:none;
+    width: auto;
+    align-self: center;
+}
