@@ -229,7 +229,7 @@ if 'preset_done' not in st.session_state:
 
 if __name__ == '__main__':
     st.sidebar.markdown('## Select Analysis Type')
-    analysis_type = st.sidebar.radio('Type', ['Build Your Team', 'Network Analysis'])
+    analysis_type = st.sidebar.radio('Type', ['Build Your Team', 'Network Analysis', 'Team Statistics'])
     if ('player_features' not in st.session_state) or ('player_features_scaled' not in st.session_state):
         main(st, df_balls, df_combined, players, player_insight_df_batsman, player_insight_df_bowler, df_ipl, player_df)
 
@@ -269,11 +269,6 @@ if __name__ == '__main__':
             selected_wicket_keepers = recommend_players(wicket_keepers_type, n = num_wicket_keepers, player_type = 'WICKETKEEPER', player_features_scaled = st.session_state['player_features_scaled'])
             num_all_rounders = int(11 - (selected_batsmen.shape[0] + selected_bowlers.shape[0] + selected_wicket_keepers.shape[0]))
             selected_all_rounders = recommend_players(all_rounders_type, n = num_all_rounders, player_features_scaled = st.session_state['player_features_scaled'])
-
-            # st.write(selected_batsmen)
-            # st.write(selected_bowlers)
-            # st.write(selected_wicket_keepers)
-            # st.write(selected_all_rounders)
 
             
             selected_players = pd.concat([selected_batsmen, selected_bowlers, selected_wicket_keepers, selected_all_rounders])
@@ -646,3 +641,54 @@ if __name__ == '__main__':
             perf_stat_4.pyplot(fig)
 
 
+    if analysis_type == 'Team Statistics':
+        st.title("Team Statistics graph")
+        player_data = st.session_state['df_combined']
+        # Converting the 'date' column to datetime format
+        player_data['date'] = pd.to_datetime(player_data['date'])
+        # Extracting the year from the date
+        player_data['year'] = player_data['date'].dt.year
+
+
+        selected_teams = st.multiselect('Select Teams to Analyse', options = player_data['team2'].unique())
+        selected_year = st.selectbox('Select Year', options = player_data['year'].unique())
+
+        view_graph = st.button('View Graph')
+
+        if view_graph:
+            # Filtering the dataset for the selected teams and year
+            filtered_data = player_data[(player_data['batting_team'].isin(selected_teams)) & 
+                                        (player_data['bowling_team'].isin(selected_teams)) & 
+                                        (player_data['year'] == selected_year)]
+
+            # Creating the network graph
+            G4 = nx.Graph()
+
+            # Adding nodes and edges based on the player relationships
+            for idx, row in filtered_data.iterrows():
+                players = [row['batsman'], row['non_striker'], row['bowler'], row['fielder']]
+                umpires = [row['umpire1'], row['umpire2']]
+                
+                # Adding player nodes
+                for player in players:
+                    if pd.notna(player):  # Checking if the player field is not null
+                        G4.add_node(player, type='player', color='skyblue')
+                
+                # Adding edges between players and umpires
+                for player in players:
+                    for umpire in umpires:
+                        if pd.notna(player) and pd.notna(umpire):  # Checking if both player and umpire fields are not null
+                            G4.add_node(umpire, type='umpire', color='red')
+                            G4.add_edge(player, umpire, label=umpire)
+
+            # Plotting the graph
+            fig4, ax4 = plt.subplots(figsize=(12, 7))
+            color_map_4 = [G4.nodes[node].get('color', 'green') for node in G4.nodes()]
+            pos_4 = nx.circular_layout(G4)
+
+            nx.draw_networkx_nodes(G4, pos_4, node_color=color_map_4)
+            nx.draw_networkx_edges(G4, pos_4)
+            nx.draw_networkx_labels(G4, pos_4, font_size=8)
+            plt.title(f"Player Relationships for {selected_teams} in {selected_year}")
+            plt.axis("off")
+            st.pyplot(fig4)
