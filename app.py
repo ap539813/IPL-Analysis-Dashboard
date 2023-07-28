@@ -229,7 +229,7 @@ if 'preset_done' not in st.session_state:
 
 if __name__ == '__main__':
     st.sidebar.markdown('## Select Analysis Type')
-    analysis_type = st.sidebar.radio('Type', ['Build Your Team', 'Network Analysis', 'Team Statistics'])
+    analysis_type = st.sidebar.radio('Type', ['Build Your Team', 'Network Analysis', 'Team Statistics', 'Player Value'])
     if ('player_features' not in st.session_state) or ('player_features_scaled' not in st.session_state):
         main(st, df_balls, df_combined, players, player_insight_df_batsman, player_insight_df_bowler, df_ipl, player_df)
 
@@ -708,3 +708,75 @@ if __name__ == '__main__':
             plt.title(f"Player Relationships for {selected_teams} in {selected_year}")
             plt.axis("off")
             st.pyplot(fig4)
+
+    if analysis_type == 'Player Value':
+        st.title("Player Value Graphs")
+        player_data = st.session_state['df_combined']
+
+        # For demonstration purposes, selecting the top 11 bowlers based on the number of balls delivered
+        selected_players = st.session_state['selected_players'].index.tolist()
+
+        # Filtering the dataset for selected players as bowlers
+        filtered_data = player_data[player_data['bowler'].isin(selected_players)]
+
+        # st.write(filtered_data.bowler.unique())
+
+        # Calculating number of balls delivered by each of the selected players
+        balls_delivered = filtered_data['bowler'].value_counts().to_dict()
+
+        # Calculating number of wickets taken by each bowler against every batsman
+        # We'll consider player_dismissed as wickets (excluding run outs)
+        wickets_data = filtered_data[filtered_data['dismissal_kind'].notna() & 
+                                    (filtered_data['dismissal_kind'] != 'run out')]
+        wickets_taken = wickets_data.groupby(['bowler', 'player_dismissed']).size().to_dict()
+
+        # Creating the network graph
+        G5 = nx.Graph()
+
+        # Adding nodes for the selected players and edges based on wickets taken
+        for (bowler, batsman), wickets in wickets_taken.items():
+            G5.add_node(bowler, type='bowler', color='red', size=balls_delivered[bowler])
+            G5.add_node(batsman, type='batsman', color='skyblue')
+            G5.add_edge(bowler, batsman, weight=wickets)
+
+        # Plotting the graph
+        fig5, ax5 = plt.subplots(figsize=(14, 10))
+        color_map_5 = [G5.nodes[node].get('color', 'green') for node in G5.nodes()]
+        node_sizes = [G5.nodes[node].get('size', 1) * 0.5 for node in G5.nodes()]
+        edge_widths = [G5[u][v]['weight'] * 0.5 for u, v in G5.edges()]
+        pos_5 = nx.circular_layout(G5)
+
+        nx.draw_networkx_nodes(G5, pos_5, node_color=color_map_5, node_size=node_sizes)
+        nx.draw_networkx_edges(G5, pos_5, width=edge_widths)
+        nx.draw_networkx_labels(G5, pos_5, font_size=8)
+        plt.title(f"Relationship of Selected Bowlers with Batsmen")
+        plt.axis("off")
+        st.pyplot(fig5)
+
+        # Extracting information for the description
+        total_bowlers = len(balls_delivered)
+        most_balls_bowler = max(balls_delivered, key=balls_delivered.get)
+        most_balls = balls_delivered[most_balls_bowler]
+
+        # Finding the bowler with the most wickets and the batsman against whom he took the most wickets
+        max_wickets = 0
+        max_wickets_bowler = ""
+        max_wickets_batsman = ""
+        for (bowler, batsman), wickets in wickets_taken.items():
+            if wickets > max_wickets:
+                max_wickets = wickets
+                max_wickets_bowler = bowler
+                max_wickets_batsman = batsman
+
+        # Formatting the description using f-string
+        description = f"""
+        In the network graph:
+        - There are {total_bowlers} selected bowlers, shown as red nodes.
+        - The size of each bowler's node indicates the number of balls they've delivered.
+        - {most_balls_bowler} has delivered the most balls, totaling {most_balls}.
+        - Edges connect bowlers to batsmen they've dismissed.
+        - The width of each edge signifies the number of times the bowler has dismissed the respective batsman.
+        - {max_wickets_bowler} has taken the most wickets (total of {max_wickets}) against {max_wickets_batsman}.
+        """
+
+        st.markdown(description)
