@@ -228,6 +228,7 @@ if 'preset_done' not in st.session_state:
 
 
 if __name__ == '__main__':
+    st.sidebar.image('Cricket2.png')
     st.sidebar.markdown('## Select Analysis Type')
     analysis_type = st.sidebar.radio('Type', ['Build Your Team', 'Network Analysis', 'Team Statistics', 'Player Value'])
     if ('player_features' not in st.session_state) or ('player_features_scaled' not in st.session_state):
@@ -696,7 +697,7 @@ if __name__ == '__main__':
             fig4, ax4 = plt.subplots(figsize=(12, 7))
 
             nx.draw_networkx_nodes(G4, pos_4, node_color=color_map_4, node_size=500)
-            nx.draw_networkx_edges(G4, pos_4)
+            nx.draw_networkx_edges(G4, pos_4, alpha=0.3)
             nx.draw_networkx_labels(G4, pos_4, font_size=8)
 
             # Adding legend
@@ -715,6 +716,8 @@ if __name__ == '__main__':
 
         # For demonstration purposes, selecting the top 11 bowlers based on the number of balls delivered
         selected_players = st.session_state['selected_players'].index.tolist()
+
+        col_bowler, col_batsman = st.columns([1, 1])
 
         # Filtering the dataset for selected players as bowlers
         filtered_data = player_data[player_data['bowler'].isin(selected_players)]
@@ -740,7 +743,7 @@ if __name__ == '__main__':
             G5.add_edge(bowler, batsman, weight=wickets)
 
         # Plotting the graph
-        fig5, ax5 = plt.subplots(figsize=(14, 10))
+        fig5, ax5 = plt.subplots(figsize=(10, 10))
         # Displaying only the bowler labels and hiding batsman labels for clarity
         bowler_labels = {node: node for node in balls_delivered.keys()}
 
@@ -754,7 +757,7 @@ if __name__ == '__main__':
         nx.draw_networkx_labels(G5, pos_5, labels=bowler_labels, font_size=15)
         plt.title(f"Relationship of Selected Bowlers with Batsmen")
         plt.axis("off")
-        st.pyplot(fig5)
+        col_bowler.pyplot(fig5)
 
         # Extracting information for the description
         total_bowlers = len(balls_delivered)
@@ -782,7 +785,7 @@ if __name__ == '__main__':
         - {max_wickets_bowler} has taken the most wickets (total of {max_wickets}) against {max_wickets_batsman}.
         """
 
-        st.markdown(description)
+        col_bowler.markdown(description)
 
 
 
@@ -814,7 +817,7 @@ if __name__ == '__main__':
 
         batter_labels = {node: node for node in total_runs.keys()}
         # Plotting the graph
-        fig8, ax8 = plt.subplots(figsize=(14, 10))
+        fig8, ax8 = plt.subplots(figsize=(10, 10))
         color_map_6 = [G6.nodes[node].get('color', 'black') for node in G6.nodes()]
         node_sizes = [G6.nodes[node].get('size', 1) * 0.3 for node in G6.nodes()]
         edge_widths = [G6[u][v]['weight'] * 0.1 for u, v in G6.edges()]
@@ -825,4 +828,33 @@ if __name__ == '__main__':
         nx.draw_networkx_labels(G6, pos_6, labels = batter_labels, font_size=15)
         plt.title(f"Relationship of Selected Batsmen with Bowlers (based on boundaries)")
         plt.axis("off")
-        st.pyplot(fig8)
+        col_batsman.pyplot(fig8)
+
+
+        # Extracting information for the description
+        total_batsmen = len(total_runs)
+        most_runs_batsman = max(total_runs, key=total_runs.get)
+        most_runs_value = total_runs[most_runs_batsman]
+
+        # Finding the batsman with the most boundaries and the bowler against whom he hit the most boundaries
+        max_boundaries = 0
+        max_boundaries_batsman = ""
+        max_boundaries_bowler = ""
+        for (batsman, bowler), boundaries in boundaries_hit.items():
+            if boundaries > max_boundaries:
+                max_boundaries = boundaries
+                max_boundaries_batsman = batsman
+                max_boundaries_bowler = bowler
+
+        # Formatting the description using f-string
+        description_batsmen = f"""
+        In the network graph:
+        - There are {total_batsmen} selected batsmen, shown as gold nodes.
+        - The size of each batsman's node indicates the total runs they've made.
+        - {most_runs_batsman} has scored the most runs, totaling {most_runs_value}.
+        - Edges connect batsmen to bowlers they've faced.
+        - The width of each edge signifies the number of boundaries (sixes and fours) the batsman has hit against the respective bowler.
+        - {max_boundaries_batsman} has hit the most boundaries (total of {max_boundaries}) against {max_boundaries_bowler}.
+        """
+
+        col_batsman.markdown(description_batsmen)
