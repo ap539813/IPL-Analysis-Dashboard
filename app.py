@@ -661,51 +661,39 @@ if __name__ == '__main__':
             filtered_data = player_data[(player_data['batting_team'].isin(selected_teams)) & 
                                         (player_data['bowling_team'].isin(selected_teams)) & 
                                         (player_data['year'] == selected_year)]
-
+            
             # Color mapping for player types
             color_map_dict = {
                 'batsman': 'gold',
-                'non_striker': 'silver',
-                'bowler': 'green',
-                'fielder': 'blue',
-                'umpire': 'red'
+                'bowler': 'green'
             }
-
-            # Updating the graph based on the player relationships and different colors
-            G4 = nx.Graph()
-
+            
+            # Creating the directed network graph based on relationships
+            G = nx.DiGraph()
             for idx, row in filtered_data.iterrows():
-                player_types = ['batsman', 'non_striker', 'bowler', 'fielder']
-                
+                player_types = ['batsman', 'bowler']
                 for p_type in player_types:
                     player = row[p_type]
-                    if pd.notna(player):  # Checking if the player field is not null
-                        G4.add_node(player, type=p_type, color=color_map_dict[p_type])
-
-                umpires = [row['umpire1'], row['umpire2']]
-                for umpire in umpires:
-                    if pd.notna(umpire):  # Checking if the umpire field is not null
-                        G4.add_node(umpire, type='umpire', color=color_map_dict['umpire'])
-                        for player in player_types:
-                            G4.add_edge(row[player], umpire, label=umpire)
-
+                    if pd.notna(player):
+                        G.add_node(player, type=p_type, color=color_map_dict[p_type])
+                G.add_edge(row['batsman'], row['bowler'])
+            
             # Extracting the color map for nodes
-            color_map_4 = [G4.nodes[node].get('color', 'black') for node in G4.nodes()]
-            pos_4 = nx.circular_layout(G4)
-
-            # Plotting the graph with legend
-            fig4, ax4 = plt.subplots(figsize=(12, 7))
-
-            nx.draw_networkx_nodes(G4, pos_4, node_color=color_map_4, node_size=500)
-            nx.draw_networkx_edges(G4, pos_4, alpha=0.3)
-            nx.draw_networkx_labels(G4, pos_4, font_size=8)
-
+            color_map = [G.nodes[node].get('color', 'black') for node in G.nodes()]
+            pos = nx.circular_layout(G)
+            
+            # Plotting the graph
+            fig4, ax = plt.subplots(figsize=(12, 7))
+            nx.draw_networkx_nodes(G, pos, node_color=color_map, node_size=500)
+            nx.draw_networkx_edges(G, pos, alpha=0.3, arrowstyle='-|>', arrowsize=20, edge_color='grey')
+            nx.draw_networkx_labels(G, pos, font_size=8)
+            
             # Adding legend
             legend_labels = {v: k for k, v in color_map_dict.items()}
             patches = [plt.Line2D([0], [0], marker='o', color='w', label=legend_labels[color], 
                                 markersize=10, markerfacecolor=color) for color in color_map_dict.values()]
             plt.legend(handles=patches, loc='upper right')
-
+            
             plt.title(f"Player Relationships for {selected_teams} in {selected_year}")
             plt.axis("off")
             st.pyplot(fig4)
@@ -722,42 +710,61 @@ if __name__ == '__main__':
         # Filtering the dataset for selected players as bowlers
         filtered_data = player_data[player_data['bowler'].isin(selected_players)]
 
-        # st.write(filtered_data.bowler.unique())
-
         # Calculating number of balls delivered by each of the selected players
         balls_delivered = filtered_data['bowler'].value_counts().to_dict()
 
         # Calculating number of wickets taken by each bowler against every batsman
-        # We'll consider player_dismissed as wickets (excluding run outs)
         wickets_data = filtered_data[filtered_data['dismissal_kind'].notna() & 
                                     (filtered_data['dismissal_kind'] != 'run out')]
         wickets_taken = wickets_data.groupby(['bowler', 'player_dismissed']).size().to_dict()
 
-        # Creating the network graph
-        G5 = nx.Graph()
+        # Filtering the wickets taken by selected bowlers
+        filtered_wickets_data = wickets_data[wickets_data['bowler'].isin(selected_players)]
+
+        # Identifying the top 3 batsmen for each bowler who gave the most wickets to the selected bowlers
+        top_batsmen_per_bowler = filtered_wickets_data.groupby('bowler')['player_dismissed'].value_counts()
+        top_batsmen_for_each_bowler = top_batsmen_per_bowler.groupby('bowler').head(3).reset_index(name='wicket_count')
+
+        # Extracting the top batsmen from this data
+        top_batsmen = top_batsmen_for_each_bowler['player_dismissed'].unique().tolist()
+
+        # Updating the graph creation code
+        G8 = nx.Graph()
 
         # Adding nodes for the selected players and edges based on wickets taken
         for (bowler, batsman), wickets in wickets_taken.items():
-            G5.add_node(bowler, type='bowler', color='red', size=balls_delivered[bowler])
-            # G5.add_node(batsman, type='batsman', color='skyblue')
-            G5.add_edge(bowler, batsman, weight=wickets)
+            # Only add nodes and edges for the top batsmen and selected bowlers
+            if bowler in selected_players:
+                G8.add_node(bowler, type='bowler', color='red', size=balls_delivered[bowler])
+                
+                if batsman in top_batsmen:
+                    G8.add_node(batsman, type='batsman', color='skyblue')
+                
+                G8.add_edge(bowler, batsman, weight=wickets)
 
-        # Plotting the graph
-        fig5, ax5 = plt.subplots(figsize=(10, 10))
-        # Displaying only the bowler labels and hiding batsman labels for clarity
-        bowler_labels = {node: node for node in balls_delivered.keys()}
+        # Creating labels only for the selected bowlers and top batsmen
+        labels_8 = {node: node for node in G8.nodes() if node in selected_players or node in top_batsmen}
 
-        color_map_5 = [G5.nodes[node].get('color', 'green') for node in G5.nodes()]
-        node_sizes = [G5.nodes[node].get('size', 1) * 0.5 for node in G5.nodes()]
-        edge_widths = [G5[u][v]['weight'] * 0.5 for u, v in G5.edges()]
-        pos_5 = nx.circular_layout(G5)
+        fig9, ax9 = plt.subplots(figsize=(12, 12))
+        color_map_8 = [G8.nodes[node].get('color', 'none') for node in G8.nodes()]
+        node_sizes = [G8.nodes[node].get('size', 1) * 0.5 if node in selected_players else 500 for node in G8.nodes()]
+        edge_widths = [G8[u][v]['weight'] * 0.5 for u, v in G8.edges()]
+        pos_8 = nx.circular_layout(G8)
 
-        nx.draw_networkx_nodes(G5, pos_5, node_color=color_map_5, node_size=node_sizes)
-        nx.draw_networkx_edges(G5, pos_5, width=edge_widths, alpha=0.3)
-        nx.draw_networkx_labels(G5, pos_5, labels=bowler_labels, font_size=15)
-        plt.title(f"Relationship of Selected Bowlers with Batsmen")
+        # Drawing nodes and edges as before
+        nx.draw_networkx_nodes(G8, pos_8, node_color=color_map_8, node_size=node_sizes, ax=ax9, label='Selected Bowlers')
+        nx.draw_networkx_edges(G8, pos_8, width=edge_widths, alpha=0.3, ax=ax9)
+        nx.draw_networkx_labels(G8, pos_8, labels=labels_8, font_size=12, ax=ax9)
+
+        # Adding the legend manually
+        red_patch = plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=10, label='Selected Bowlers')
+        skyblue_patch = plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='skyblue', markersize=10, label='Top 3 Batsmen for each Bowler')
+        ax9.legend(handles=[red_patch, skyblue_patch], loc='upper left')
+
+        plt.title(f"Relationship of Selected Bowlers with Top Batsmen")
         plt.axis("off")
-        col_bowler.pyplot(fig5)
+
+        col_bowler.pyplot(fig9)
 
         # Extracting information for the description
         total_bowlers = len(balls_delivered)
@@ -793,42 +800,65 @@ if __name__ == '__main__':
 
 
 
-        # For demonstration purposes, selecting the top 11 batsmen based on the number of runs scored
-        selected_players = player_data.groupby('batsman')['batsman_runs'].sum().nlargest(11).index.tolist()
 
         # Filtering the dataset for selected players as batsmen
         filtered_data_batsmen = player_data[player_data['batsman'].isin(selected_players)]
 
+        # Filtering the dataset for selected players as batsmen
+        filtered_data_batsmen = player_data[player_data['batsman'].isin(selected_players)]
+
+        # Re-calculating the boundary data and boundaries hit
+        boundary_data = filtered_data_batsmen[filtered_data_batsmen['batsman_runs'].isin([4, 6])]
+        boundaries_hit = boundary_data.groupby(['batsman', 'bowler'])['batsman_runs'].size().to_dict()
+        top_bowlers_per_batsman = boundary_data.groupby('batsman')['bowler'].value_counts()
+        top_bowlers_for_each_batsman = top_bowlers_per_batsman.groupby('batsman').head(1).reset_index(name='boundary_count')
+
+        # Extracting the top bowlers from this data
+        top_bowlers = top_bowlers_for_each_batsman['bowler'].unique().tolist()
+
         # Calculating total runs made by each of the selected players
         total_runs = filtered_data_batsmen.groupby('batsman')['batsman_runs'].sum().to_dict()
 
-        # Calculating number of sixes and fours by each batsman against every bowler
-        boundary_data = filtered_data_batsmen[filtered_data_batsmen['batsman_runs'].isin([4, 6])]
-        boundaries_hit = boundary_data.groupby(['batsman', 'bowler'])['batsman_runs'].size().to_dict()
-
-        # Creating the network graph
-        G6 = nx.Graph()
+        # Modifying the graph creation code again
+        G12 = nx.Graph()
 
         # Adding nodes for the selected players and edges based on boundaries hit
         for (batsman, bowler), boundaries in boundaries_hit.items():
-            G6.add_node(batsman, type='batsman', color='gold', size=total_runs[batsman])
-            # G6.add_node(bowler, type='bowler', color='green')
-            G6.add_edge(batsman, bowler, weight=boundaries)
+            # Only add nodes and edges for the top bowlers and selected batsmen
+            if batsman in selected_players:
+                G12.add_node(batsman, type='batsman', color='gold', size=total_runs[batsman])
+                
+                if bowler in top_bowlers:
+                    G12.add_node(bowler, type='bowler', color='green')
+                
+                G12.add_edge(batsman, bowler, weight=boundaries)
 
-        batter_labels = {node: node for node in total_runs.keys()}
+        # Creating labels only for the selected batsmen and top bowlers
+        labels_12 = {node: node for node in G12.nodes() if node in selected_players or node in top_bowlers}
+
         # Plotting the graph
-        fig8, ax8 = plt.subplots(figsize=(10, 10))
-        color_map_6 = [G6.nodes[node].get('color', 'black') for node in G6.nodes()]
-        node_sizes = [G6.nodes[node].get('size', 1) * 0.3 for node in G6.nodes()]
-        edge_widths = [G6[u][v]['weight'] * 0.1 for u, v in G6.edges()]
-        pos_6 = nx.circular_layout(G6)
+        fig12, ax12 = plt.subplots(figsize=(12, 12))
+        color_map_12 = [G12.nodes[node].get('color', 'none') for node in G12.nodes()]
+        node_sizes = [G12.nodes[node].get('size', 1) * 0.4 for node in G12.nodes()]
+        edge_widths = [G12[u][v]['weight'] * 0.1 for u, v in G12.edges()]
+        pos_12 = nx.circular_layout(G12)
 
-        nx.draw_networkx_nodes(G6, pos_6, node_color=color_map_6, node_size=node_sizes)
-        nx.draw_networkx_edges(G6, pos_6, width=edge_widths, alpha=0.3)  # Setting alpha to make edges opaque
-        nx.draw_networkx_labels(G6, pos_6, labels = batter_labels, font_size=15)
-        plt.title(f"Relationship of Selected Batsmen with Bowlers (based on boundaries)")
+        fig13, ax13 = plt.subplots(figsize=(12, 12))
+
+        # Drawing nodes and edges as before
+        nx.draw_networkx_nodes(G12, pos_12, node_color=color_map_12, node_size=node_sizes, ax=ax13)
+        nx.draw_networkx_edges(G12, pos_12, width=edge_widths, alpha=0.3, ax=ax13)
+        nx.draw_networkx_labels(G12, pos_12, labels=labels_12, font_size=12, ax=ax13)
+
+        # Adding the legend manually
+        gold_patch = plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='gold', markersize=10, label='Selected Batsmen')
+        green_patch = plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='green', markersize=10, label='Top Bowlers for Boundaries')
+        ax13.legend(handles=[gold_patch, green_patch], loc='upper left')
+
+        plt.title(f"Relationship of Selected Batsmen with Top Bowlers (based on boundaries)")
         plt.axis("off")
-        col_batsman.pyplot(fig8)
+        plt.show()
+        col_batsman.pyplot(fig13)
 
 
         # Extracting information for the description
