@@ -6,7 +6,7 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from sklearn.metrics.pairwise import cosine_similarity
 
 
-def recommend_players(player_name, player_type = None, n=5, player_features_scaled = None):
+def recommend_players(player_name, player_type=None, n=5, player_features_scaled=None, exclude_players=[], include_player = False):
     """
     Recommends 'n' players similar to the given player based on the similarity matrix.
     
@@ -15,21 +15,24 @@ def recommend_players(player_name, player_type = None, n=5, player_features_scal
     - player_type (str): Type of the player (Batsman, Bowler, All-Rounder).
     - n (int): Number of similar players to recommend.
     - player_features_scaled: Final features of the players
+    - exclude_players (list): List of players to exclude from recommendations.
     
     Returns:
     - List of recommended players.
     """
 
-    # Create Similrity Matrix
+    # Create Similarity Matrix
     similarity_matrix = cosine_similarity(player_features_scaled)
     similarity_df = pd.DataFrame(similarity_matrix, index=player_features_scaled.index, columns=player_features_scaled.index)
 
-    
     # Filter based on player type if given
     if player_type:
         possible_recommendations = player_features_scaled[player_features_scaled[f'TYPE_{player_type}'] == 1].index
     else:
         possible_recommendations = player_features_scaled.index
+
+    # Filter out the excluded players
+    possible_recommendations = [player for player in possible_recommendations if player not in exclude_players]
         
     # Get similar players
     similar_players = similarity_df[player_name].loc[possible_recommendations]
@@ -39,11 +42,14 @@ def recommend_players(player_name, player_type = None, n=5, player_features_scal
 
     similar_players = similar_players.sort_values(ascending=False)
     
-    print(similar_players.index)
     # Remove the player himself/herself from the recommendations and get top n players
-    recommended_players = similar_players.iloc[1:n+1]
+    if include_player:
+        recommended_players = similar_players.iloc[:n]
+    else:
+        recommended_players = similar_players.iloc[1:n+1]
     
     return recommended_players
+
 
 
 
