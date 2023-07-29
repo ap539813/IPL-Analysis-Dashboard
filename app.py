@@ -262,14 +262,34 @@ if __name__ == '__main__':
         wicket_keepers_type = slider_col[2].selectbox('Choose Wicket Keepers Type: ', options = wicket_keepers['PLAYER'].unique())
         all_rounders_type = st.selectbox('Choose All Rounder Type: ', options = all_rounders['PLAYER'].unique())
 
+        include_suggestions = st.checkbox('Include Suggeasted Players')
+
         recommend_player_button = st.button('Recommend Players >>')
 
         if recommend_player_button:
-            selected_batsmen = recommend_players(batsman_type, n = num_batsmen, player_type = 'BATTER', player_features_scaled = st.session_state['player_features_scaled'])
-            selected_bowlers = recommend_players(bowler_type, n = num_bowlers, player_type = 'BOWLER', player_features_scaled = st.session_state['player_features_scaled'])
-            selected_wicket_keepers = recommend_players(wicket_keepers_type, n = num_wicket_keepers, player_type = 'WICKETKEEPER', player_features_scaled = st.session_state['player_features_scaled'])
+            selected_batsmen = recommend_players(batsman_type, n = num_batsmen, 
+                                                 player_type = 'BATTER', 
+                                                 player_features_scaled = st.session_state['player_features_scaled'],
+                                                 include_player = include_suggestions)
+            # st.write(list(selected_batsmen.index))
+            selected_bowlers = recommend_players(bowler_type, n = num_bowlers, 
+                                                 player_type = 'BOWLER', 
+                                                 player_features_scaled = st.session_state['player_features_scaled'], 
+                                                 exclude_players = list(selected_batsmen.index),
+                                                 include_player = include_suggestions)
+            # st.write(list(selected_batsmen.index) + list(selected_bowlers.index))
+            selected_wicket_keepers = recommend_players(wicket_keepers_type, n = num_wicket_keepers, 
+                                                        player_type = 'WICKETKEEPER', 
+                                                        player_features_scaled = st.session_state['player_features_scaled'],
+                                                        exclude_players = list(selected_batsmen.index) + list(selected_bowlers.index),
+                                                        include_player = include_suggestions)
+            # st.write(list(selected_batsmen.index) + list(selected_bowlers.index) + list(selected_wicket_keepers.index))
             num_all_rounders = int(11 - (selected_batsmen.shape[0] + selected_bowlers.shape[0] + selected_wicket_keepers.shape[0]))
-            selected_all_rounders = recommend_players(all_rounders_type, n = num_all_rounders, player_features_scaled = st.session_state['player_features_scaled'])
+
+            selected_all_rounders = recommend_players(all_rounders_type, n = num_all_rounders, 
+                                                      player_features_scaled = st.session_state['player_features_scaled'],
+                                                      exclude_players = list(selected_batsmen.index) + list(selected_bowlers.index) + list(selected_wicket_keepers.index),
+                                                      include_player = include_suggestions)
 
             
             selected_players = pd.concat([selected_batsmen, selected_bowlers, selected_wicket_keepers, selected_all_rounders])
@@ -302,7 +322,7 @@ if __name__ == '__main__':
             bowler_balls = chosen_player_data_full.groupby('bowler').size().sort_values(ascending=False)
 
             # Picking top 10 bowlers against whom player scored the most runs
-            top_bowlers = bowler_runs.head(10)
+            top_bowlers = bowler_runs
 
             net_graph_1 = st.expander(f'Batsman-Bowler Network for {chosen_player}')
             cols_net_graph_1 = net_graph_1.columns([2, 1])
@@ -326,7 +346,7 @@ if __name__ == '__main__':
             # Plotting the network graph
             fig, axes = plt.subplots(figsize=(12, 12))
             colors = [G.nodes[node]['color'] for node in G.nodes]
-            pos = nx.spring_layout(G)  # positions for all nodes
+            pos = nx.circular_layout(G)  # positions for all nodes
 
             # Use the number of balls faced to scale the node sizes
             node_sizes = [G.nodes[node].get('size', 1) * 50 for node in G.nodes]
@@ -355,6 +375,69 @@ if __name__ == '__main__':
             cols_net_graph_1[1].markdown(f'### Description of Batsman-Bowler Network for {chosen_player}')
             cols_net_graph_1[1].write(stats)
 
+
+
+
+            net_graph_0 = st.expander(f'Network graph of players bowled by {chosen_player}')
+            cols_net_graph_0 = net_graph_0.columns([2, 1])
+            
+            # Filter out rows where bowler is our chosen_player
+            filtered_data = player_data[player_data['bowler'] == chosen_player]
+
+            if filtered_data.shape[0] != 0:
+
+                # Group by batsman to get the number of times the chosen_player bowled to each batsman
+                # and the number of times he dismissed them
+                grouped_data = filtered_data.groupby('batsman').agg(
+                    total_bowled=pd.NamedAgg(column='bowler', aggfunc='count'),
+                    times_dismissed=pd.NamedAgg(column='player_dismissed', aggfunc='sum')
+                ).reset_index()
+
+                # Convert player names in the times_dismissed column to 1 (indicating a dismissal)
+                grouped_data['times_dismissed'] = grouped_data['times_dismissed'].apply(lambda x: 1 if isinstance(x, str) else x)
+
+                # Sum up the values to get the total number of times each batsman was dismissed by the chosen player
+                grouped_data['times_dismissed'] = grouped_data['times_dismissed'].astype(int)
+
+                # Now, let's recreate the network graph
+                G = nx.DiGraph()
+
+                # Add nodes for the chosen_player and the batsmen
+                G.add_node(chosen_player, color='pink')
+                for index, row in grouped_data.iterrows():
+                    G.add_node(row['batsman'], color='skyblue')
+                    G.add_edge(chosen_player, row['batsman'], weight=row['times_dismissed'], size=row['total_bowled'])
+
+                # Draw the graph
+                fig_x, axes_x = plt.subplots(figsize=(12, 8))
+                colors = [G.nodes[node]['color'] for node in G.nodes()]
+                edge_widths = [1 + 2 * G.edges[edge]['weight'] for edge in G.edges()]
+                edge_sizes = [G.edges[edge]['size'] for edge in G.edges()]
+                pos = nx.spring_layout(G)
+                nx.draw(G, pos, with_labels=True, node_color=colors, width=edge_widths, node_size=2000, alpha=0.7, ax = axes_x)
+                
+                plt.title(f"Network graph of players bowled by {chosen_player}")
+                cols_net_graph_0[0].pyplot(fig_x)
+
+                # Recalculate the required values for the description
+                total_batsmen = len(grouped_data)
+                dismissed_batsmen = len(grouped_data[grouped_data['times_dismissed'] > 0])
+                top_dismissed_batsman = grouped_data.sort_values(by='times_dismissed', ascending=False).iloc[0]['batsman']
+                top_dismissed_count = grouped_data.sort_values(by='times_dismissed', ascending=False).iloc[0]['times_dismissed']
+
+                # Recreate the dynamic description
+                description = f"""
+                - {chosen_player} has bowled to {total_batsmen} different batsmen. 
+                - Among them, he has dismissed {dismissed_batsmen} batsmen. 
+                - The batsman he dismissed the most is {top_dismissed_batsman} with {top_dismissed_count} dismissals."""
+
+                
+                cols_net_graph_0[1].markdown('')
+                cols_net_graph_0[1].markdown(f'### Description of Network graph of players bowled by {chosen_player}')
+                cols_net_graph_0[1].write(description)
+
+            else:
+                net_graph_0.warning(f'{chosen_player} has not bowled anyone')
 
 
 
