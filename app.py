@@ -236,6 +236,8 @@ if __name__ == '__main__':
 
 
     if analysis_type == 'Build Your Team':
+
+        total_players_to_take = 25
         # Recommendation Interface
         st.title("Select Your Cricket Team")
 
@@ -249,10 +251,10 @@ if __name__ == '__main__':
         # Select number of each player type
         slider_col = st.columns([1, 1, 1])
 
-        num_batsmen = slider_col[0].slider("Number of Batsmen", 1, 11)
-        num_bowlers = slider_col[1].slider("Number of Bowlers", 1, 11-num_batsmen)
-        num_wicket_keepers = slider_col[2].slider("Number of Wicket Keepers", 1, 11-num_batsmen-num_bowlers)
-        num_all_rounders = 11 - num_batsmen - num_bowlers - num_wicket_keepers
+        num_batsmen = slider_col[0].slider("Number of Batsmen", 1, total_players_to_take)
+        num_bowlers = slider_col[1].slider("Number of Bowlers", 1, total_players_to_take-num_batsmen)
+        num_wicket_keepers = slider_col[2].slider("Number of Wicket Keepers", 1, total_players_to_take-num_batsmen-num_bowlers)
+        num_all_rounders = total_players_to_take - num_batsmen - num_bowlers - num_wicket_keepers
 
         # st.write(st.session_state['player_features_scaled'])
 
@@ -284,7 +286,7 @@ if __name__ == '__main__':
                                                         exclude_players = list(selected_batsmen.index) + list(selected_bowlers.index),
                                                         include_player = include_suggestions)
             # st.write(list(selected_batsmen.index) + list(selected_bowlers.index) + list(selected_wicket_keepers.index))
-            num_all_rounders = int(11 - (selected_batsmen.shape[0] + selected_bowlers.shape[0] + selected_wicket_keepers.shape[0]))
+            num_all_rounders = int(total_players_to_take - (selected_batsmen.shape[0] + selected_bowlers.shape[0] + selected_wicket_keepers.shape[0]))
 
             selected_all_rounders = recommend_players(all_rounders_type, n = num_all_rounders, 
                                                       player_features_scaled = st.session_state['player_features_scaled'],
@@ -302,6 +304,65 @@ if __name__ == '__main__':
                 player_expander = col_players[i%2].expander(player)
                 player_expander.write(st.session_state['player_df'][st.session_state['player_df']['PLAYER'] == player])
                 i += 1
+
+            selected_player_names = list(selected_players.index)
+            player_data = st.session_state['df_combined']
+            # Filter the dataframe to only include rows corresponding to the players in selected_player_names
+            filtered_players = player_data[player_data['batsman'].isin(selected_player_names) | player_data['non_striker'].isin(selected_player_names)]
+
+            # Create an empty directed graph
+            G = nx.DiGraph()
+
+            # For each player in selected_player_names, identify other players who have played in the same team
+            for player in selected_player_names:
+                # Find matches where the player is either batsman or non_striker
+                matches = filtered_players[(filtered_players['batsman'] == player) | (filtered_players['non_striker'] == player)]
+                
+                # Identify unique teammates in those matches
+                teammates = matches['batsman'].append(matches['non_striker']).unique()
+                
+                # Remove the player from the teammates list
+                teammates = [tm for tm in teammates if tm != player and tm in selected_player_names]
+                
+                # Add edges to the graph
+                for tm in teammates:
+                    G.add_edge(player, tm)
+
+            # Draw the graph
+            fig_players, axes_players = plt.subplots(figsize=(15, 10))
+            pos = nx.spring_layout(G)
+            nx.draw(G, pos, with_labels=True, node_color='skyblue', node_size=3000, edge_color='gray', width=1.0, alpha=0.6, ax = axes_players)
+            plt.title("Network graph of players who teamed up")
+            st.pyplot(fig_players)
+
+            # Compute graph metrics
+            degree_centrality = nx.degree_centrality(G)
+            closeness_centrality = nx.closeness_centrality(G)
+            betweenness_centrality = nx.betweenness_centrality(G)
+            eigenvector_centrality = nx.eigenvector_centrality(G)
+
+            # # Generate a dynamic description for each player
+            # descriptions = {}
+            # for player in selected_player_names:
+            #     if player in G.nodes():  # Ensure the player is in the graph
+            #         desc = (f"{player} has teamed up with {int(degree_centrality[player] * (len(G.nodes()) - 1))} players, "
+            #                 f"indicating their versatility in playing with various teammates. Their closeness centrality of "
+            #                 f"{closeness_centrality[player]:.2f} shows that they are closely connected to other players. "
+            #                 f"Their betweenness centrality of {betweenness_centrality[player]:.2f} indicates their role as a bridge "
+            #                 f"between different players. With an eigenvector centrality of {eigenvector_centrality[player]:.2f}, "
+            #                 f"they are influential in the network.")
+            #         descriptions[player] = desc
+
+            # Display the description
+            # Create the dataframe with the computed metrics
+            metrics_df = pd.DataFrame({
+                'Teamed Up With others': [int(degree_centrality[player] * (len(G.nodes()) - 1)) for player in selected_player_names if player in G.nodes()],
+                'Closeness Centrality': [closeness_centrality[player] for player in selected_player_names if player in G.nodes()],
+                'Betweenness Centrality': [betweenness_centrality[player] for player in selected_player_names if player in G.nodes()],
+                'Eigenvector Centrality': [eigenvector_centrality[player] for player in selected_player_names if player in G.nodes()]
+            }, index=[player for player in selected_player_names if player in G.nodes()])
+
+            st.dataframe(metrics_df, use_container_width = True)
 
         
     if analysis_type == 'Network Analysis':
@@ -785,7 +846,7 @@ if __name__ == '__main__':
         st.title("Player Value Graphs")
         player_data = st.session_state['df_combined']
 
-        # For demonstration purposes, selecting the top 11 bowlers based on the number of balls delivered
+        # For demonstration purposes, selecting the top total_players_to_take bowlers based on the number of balls delivered
         selected_players = st.session_state['selected_players'].index.tolist()
 
         col_bowler, col_batsman = st.columns([1, 1])
